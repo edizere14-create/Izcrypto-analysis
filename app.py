@@ -20,21 +20,35 @@ def fetch_kraken_ohlcv(pair="XXBTZUSD", interval=60, since=None, limit=500):
     params = {"pair": pair, "interval": interval}
     if since:
         params["since"] = since
+
     r = requests.get(url, params=params)
     data = r.json()
+
     if data.get("error"):
         raise ValueError(data["error"])
+
     key = list(data["result"].keys())[0]
     ohlc = data["result"][key]
+
+    # Kraken returns: [time, open, high, low, close, vwap, volume, count]
     cols = ["timestamp", "open", "high", "low", "close", "vwap", "volume", "count"]
     df = pd.DataFrame(ohlc, columns=cols)
+
+    # Convert types
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
-    df["open"] = df["open"].astype(float)
-    df["high"] = df["high"].astype(float)
-    df["low"] = df["low"].astype(float)
-    df["close"] = df["close"].astype(float)
-    df["volume"] = df["volume"].astype(float)
-    return df[["timestamp", "open", "high", "low", "close", "volume"]].tail(limit)
+    for col in ["open", "high", "low", "close", "vwap", "volume", "count"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Drop bad rows
+    df = df.dropna()
+
+    # Keep only needed columns
+    df = df[["timestamp", "open", "high", "low", "close", "volume"]]
+
+    # Limit rows safely
+    df = df.tail(limit)
+
+    return df
 
 
 def compute_rsi(series, length=14):
@@ -454,4 +468,5 @@ elif page == "Downloads":
             file_name=raw_name,
             mime="text/csv",
         )
+
 
