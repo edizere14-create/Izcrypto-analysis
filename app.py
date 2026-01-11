@@ -201,6 +201,19 @@ else:
 if df is not None:
     df = df.sort_values("timestamp").reset_index(drop=True)
 
+# ============================
+# DEBUG PANEL
+# ============================
+    with st.expander("🔍 Debug Panel: Kraken Data"):
+        st.write("**Number of rows:**", len(df))
+        st.write("**DataFrame head:**")
+        st.dataframe(df.head())
+        st.write("**DataFrame tail:**")
+        st.dataframe(df.tail())
+        st.write("**DataFrame dtypes:**")
+        st.write(df.dtypes)
+
+
 # -----------------------------
 # HOME PAGE
 # -----------------------------
@@ -468,5 +481,4 @@ elif page == "Downloads":
             file_name=raw_name,
             mime="text/csv",
         )
-
 
