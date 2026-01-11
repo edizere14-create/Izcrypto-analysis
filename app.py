@@ -83,25 +83,40 @@ def compute_obv(close, volume):
 
 
 def find_divergences(price, indicator, lookback=5):
-    # Very simple local high/low divergence marking
     div_points = []
-    for i in range(lookback, len(price) - lookback):
-        # Price high, indicator lower high (bearish)
-        if price[i] == max(price[i - lookback:i + lookback + 1]):
-            # find previous local high
+    n = len(price)
+
+    for i in range(lookback, n - lookback):
+        # Define window safely
+        price_window = price[i - lookback : i + lookback + 1]
+        ind_window = indicator[i - lookback : i + lookback + 1]
+
+        # Skip if windows are empty
+        if len(price_window) == 0 or len(ind_window) == 0:
+            continue
+
+        # Bearish divergence
+        if price[i] == price_window.max():
             for j in range(i - lookback, i):
-                if price[j] == max(price[j - lookback:j + lookback + 1]):
-                    if indicator[i] < indicator[j]:
-                        div_points.append((i, "bearish"))
-                        break
-        # Price low, indicator higher low (bullish)
-        if price[i] == min(price[i - lookback:i + lookback + 1]):
+                prev_window = price[j - lookback : j + lookback + 1]
+                if len(prev_window) == 0:
+                    continue
+                if price[j] == prev_window.max() and indicator[i] < indicator[j]:
+                    div_points.append((i, "bearish"))
+                    break
+
+        # Bullish divergence
+        if price[i] == price_window.min():
             for j in range(i - lookback, i):
-                if price[j] == min(price[j - lookback:j + lookback + 1]):
-                    if indicator[i] > indicator[j]:
-                        div_points.append((i, "bullish"))
-                        break
+                prev_window = price[j - lookback : j + lookback + 1]
+                if len(prev_window) == 0:
+                    continue
+                if price[j] == prev_window.min() and indicator[i] > indicator[j]:
+                    div_points.append((i, "bullish"))
+                    break
+
     return div_points
+
 
 
 def backtest_strategy(df, signal_col, fee=0.001):
@@ -512,5 +527,6 @@ elif page == "Downloads":
 if auto_refresh:
     st.experimental_rerun()
     time.sleep(refresh_interval)
+
 
 
