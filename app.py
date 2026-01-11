@@ -15,40 +15,43 @@ st.title("📊 IZ Crypto Analysis Dashboard")
 # -----------------------------
 # HELPERS
 # -----------------------------
-def fetch_kraken_ohlcv(pair="XXBTZUSD", interval=60, since=None, limit=500):
+def fetch_kraken_ohlcv(pair="XXBTZUSD", interval=60, since=None, limit=500, retries=3):
     url = "https://api.kraken.com/0/public/OHLC"
     params = {"pair": pair, "interval": interval}
-    if since:
-        params["since"] = since
 
-    r = requests.get(url, params=params)
-    data = r.json()
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(url, params=params, timeout=10)
+            data = r.json()
 
-    if data.get("error"):
-        raise ValueError(data["error"])
+            if data.get("error"):
+                raise ValueError(data["error"])
 
-    key = list(data["result"].keys())[0]
-    ohlc = data["result"][key]
+            key = list(data["result"].keys())[0]
+            ohlc = data["result"][key]
 
-    # Kraken returns: [time, open, high, low, close, vwap, volume, count]
-    cols = ["timestamp", "open", "high", "low", "close", "vwap", "volume", "count"]
-    df = pd.DataFrame(ohlc, columns=cols)
+            if not ohlc:
+                raise ValueError("Empty OHLC data returned")
 
-    # Convert types
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
-    for col in ["open", "high", "low", "close", "vwap", "volume", "count"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+            cols = ["timestamp", "open", "high", "low", "close", "vwap", "volume", "count"]
+            df = pd.DataFrame(ohlc, columns=cols)
 
-    # Drop bad rows
-    df = df.dropna()
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+            for col in ["open", "high", "low", "close", "vwap", "volume", "count"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Keep only needed columns
-    df = df[["timestamp", "open", "high", "low", "close", "volume"]]
+            df = df.dropna()
+            df = df[["timestamp", "open", "high", "low", "close", "volume"]]
+            df = df.tail(limit)
 
-    # Limit rows safely
-    df = df.tail(limit)
+            if len(df) > 0:
+                return df
 
-    return df
+        except Exception as e:
+            if attempt == retries:
+                raise e
+
+    raise ValueError("Failed to fetch valid data after retries")
 
 
 def compute_rsi(series, length=14):
@@ -167,6 +170,10 @@ data_source = st.sidebar.selectbox("Data source", ["Upload CSV", "Kraken API"])
 
 pair = st.sidebar.text_input("Kraken pair (for API)", "XXBTZUSD")
 interval = st.sidebar.selectbox("Kraken interval (minutes)", [1, 5, 15, 60, 240, 1440], index=3)
+auto_refresh = st.sidebar.checkbox("Auto-refresh live data")
+refresh_interval = st.sidebar.number_input("Refresh every (seconds)", 5, 300, 30)
+
+
 
 # -----------------------------
 # DATA LOADING
@@ -200,6 +207,25 @@ else:
 
 if df is not None:
     df = df.sort_values("timestamp").reset_index(drop=True)
+
+else:
+    if auto_refresh:
+        try:
+            df = fetch_kraken_ohlcv(pair=pair, interval=interval)
+            st.sidebar.success("Auto-refreshed data")
+            st.experimental_rerun()
+        except Exception as e:
+            st.sidebar.error(f"Error fetching data: {e}")
+            df = None
+    else:
+        if st.sidebar.button("Fetch from Kraken"):
+            try:
+                df = fetch_kraken_ohlcv(pair=pair, interval=interval)
+                st.sidebar.success("Fetched data from Kraken.")
+            except Exception as e:
+                st.sidebar.error(f"Error fetching data: {e}")
+                df = None
+
 
 # ============================
 # DEBUG PANEL
@@ -481,4 +507,10 @@ elif page == "Downloads":
             file_name=raw_name,
             mime="text/csv",
         )
+# Streamlit's build-in refresh timer
+
+if auto_refresh:
+    st.experimental_rerun()
+    time.sleep(refresh_interval)
+
 
