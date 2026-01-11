@@ -47,9 +47,9 @@ def fetch_kraken_ohlcv(pair="XXBTZUSD", interval=60, since=None, limit=500, retr
             if len(df) > 0:
                 return df
 
-        except Exception as e:
+        except Exception:
             if attempt == retries:
-                raise e
+                raise
 
     raise ValueError("Failed to fetch valid data after retries")
 
@@ -168,6 +168,10 @@ def download_link(df, filename):
 # -----------------------------
 st.sidebar.title("Navigation")
 
+auto_refresh = st.sidebar.checkbox("Auto-refresh live data")
+refresh_interval = st.sidebar.number_input("Refresh every (seconds)", 5, 300, 30)
+
+
 page = st.sidebar.radio(
     "Go to",
     [
@@ -212,13 +216,28 @@ if data_source == "Upload CSV":
             st.error(f"CSV must contain columns: {required}")
             df = None
 else:
-    if st.sidebar.button("Fetch from Kraken"):
+    if auto_refresh:
         try:
             df = fetch_kraken_ohlcv(pair=pair, interval=interval)
-            st.sidebar.success("Fetched data from Kraken.")
+            st.sidebar.success("Auto-refreshed data")
         except Exception as e:
             st.sidebar.error(f"Error fetching data: {e}")
             df = None
+
+        # Trigger refresh
+        import time
+        time.sleep(refresh_interval)
+        st.experimental_rerun()
+
+    else:
+        if st.sidebar.button("Fetch from Kraken"):
+            try:
+                df = fetch_kraken_ohlcv(pair=pair, interval=interval)
+                st.sidebar.success("Fetched data from Kraken.")
+            except Exception as e:
+                st.sidebar.error(f"Error fetching data: {e}")
+                df = None
+
 
 if df is not None:
     df = df.sort_values("timestamp").reset_index(drop=True)
@@ -527,6 +546,7 @@ elif page == "Downloads":
 if auto_refresh:
     st.experimental_rerun()
     time.sleep(refresh_interval)
+
 
 
 
